@@ -1,3 +1,4 @@
+#однослойный персептрон
 def neyron(a, o):
     sch = 0
     omega = 0
