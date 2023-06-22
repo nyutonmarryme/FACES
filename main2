@@ -1,0 +1,70 @@
+import tensorflow as tf 
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout
+from keras.preprocessing import image_dataset_from_directory
+batch_size=16 #размер мини-выборки
+image_size=(400, 600)
+train_dataset = image_dataset_from_directory('train',subset='training',seed=42,validation_split=0.1,batch_size=batch_size,image_size=image_size)
+validation_dataset = image_dataset_from_directory('train',subset='validation',seed=42,validation_split=0.1,batch_size=batch_size,image_size=image_size)
+test_dataset = image_dataset_from_directory('group/test',batch_size=batch_size, image_size=image_size)
+AUTOTUNE = tf.data.experimental.AUTOTUNE
+train_dataset = train_dataset.prefetch(buffer_size=AUTOTUNE)
+validation_dataset = validation_dataset.prefetch(buffer_size=AUTOTUNE)
+test_dataset = test_dataset.prefetch(buffer_size=AUTOTUNE)
+model = Sequential() # Создаем последовательную модель
+model.add(Conv2D(16, (5, 5), padding='same',input_shape=(300, 600, 3), activation='relu')) # Сверточный слой
+model.add(MaxPooling2D(pool_size=(2, 2))) # Слой подвыборки
+model.add(Conv2D(32, (5, 5), activation='relu', padding='same')) # Сверточный слой
+model.add(MaxPooling2D(pool_size=(2, 2))) # Слой подвыборки
+model.add(Conv2D(64, (5, 5), activation='relu', padding='same')) # Сверточный слой
+model.add(MaxPooling2D(pool_size=(2, 2))) # Слой подвыборки
+model.add(Conv2D(128, (5, 5), activation='relu', padding='same')) # Сверточный слой
+model.add(MaxPooling2D(pool_size=(2, 2))) # Слой подвыборки
+model.add(Flatten())# Полносвязная часть нейронной сети для классификации
+model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(19, activation='softmax')) # Выходной слой, 19 нейронов по количеству классов
+model.compile(loss='sparse_categorical_crossentropy',optimizer="adam",metrics=['accuracy'])
+history = model.fit(train_dataset,validation_data=validation_dataset,epochs=25,verbose=2)
+scores = model.evaluate(test_dataset, verbose=1)
+model.save("keras_model.h5")
+#код для распознавания
+from keras.models import load_model  
+
+from PIL import Image, ImageOps  
+import numpy as np
+import time
+start_time = time.time()
+# Отключаем  экспоненциальное представление для ясности
+np.set_printoptions(suppress=True)
+# Загружаем модель
+model = load_model("keras_Model.h5", compile=False)
+# Загружаем метки
+class_names = open("labels.txt", "r").readlines()
+# Создаем массив правильной формы для подачи в модель keras
+# «Длина» или количество изображений, которые мы можем поместить в массив,
+# определяется первой позицией в кортеже формы, в данном случае 1
+data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
+# Путь к изображению
+image = Image.open("group/test/Nasybullina/2.jpg").convert("RGB")
+# изменение размера изображения до размера не менее 224x224,
+# а затем обрезка от центра
+size = (224, 224)
+image = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+# превращаение изображения в массив numpy
+image_array = np.asarray(image)
+# Нормализуем изображение
+normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+# Загрузка изображения в массив
+data[0] = normalized_image_array
+# Предсказание модели
+prediction = model.predict(data)
+index = np.argmax(prediction)
+class_name = class_names[index]
+confidence_score = prediction[0][index]
+# Вывод прогноза и показателя достоверности
+print("Class:", class_name[2:], end="")
+#print("Confidence Score:", confidence_score)
+print("--- %s seconds ---" % (time.time() - start_time))
